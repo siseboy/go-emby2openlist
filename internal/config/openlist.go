@@ -57,6 +57,18 @@ type LocalTreeGen struct {
 	// IgnoreContainers 忽略指定的容器
 	IgnoreContainers string `yaml:"ignore-containers"`
 
+	// StrmContentBase 生成的 strm 内容路径前缀, 可为空
+	// 为空时默认使用 `${openlist.host}/d`
+	StrmContentBase string `yaml:"strm-content-base"`
+
+	// StrmContentEscape 是否对路径分段进行 URL 编码
+	// 默认值: true; 若用户未配置, 在初始化时置为 true
+	StrmContentEscape *bool `yaml:"strm-content-escape"`
+
+	// StrmContentWithSign 是否在 strm 内容中附加签名参数
+	// 默认值: true; 设置为 false 时不生成 `?sign=` 片段
+	StrmContentWithSign *bool `yaml:"strm-content-with-sign"`
+
 	// Threads 同步线程数
 	Threads int `yaml:"threads"`
 
@@ -134,6 +146,18 @@ func (ltg *LocalTreeGen) Init() error {
 	ltg.ignoreContainers = make(map[string]struct{}, len(ss))
 	for _, s := range ss {
 		ltg.ignoreContainers[strings.ToLower(s)] = struct{}{}
+	}
+
+	// 处理 strm 内容编码开关默认值
+	if ltg.StrmContentEscape == nil {
+		v := true
+		ltg.StrmContentEscape = &v
+	}
+
+	// 处理 strm 内容是否附加签名的默认值
+	if ltg.StrmContentWithSign == nil {
+		v := true
+		ltg.StrmContentWithSign = &v
 	}
 
 	return nil

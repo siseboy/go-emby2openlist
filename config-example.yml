@@ -60,6 +60,15 @@ openlist:
     # strm 媒体容器, 生成的是与媒体名称相同的 strm 文件
     # 通过 emby 源端口也可能正常播放
     strm-containers: ts
+    # 生成的 strm 内容路径前缀, 为空则默认使用 `${openlist.host}/d`
+    # 示例: 将默认的 `http://172.17.0.1/d/` 替换为相对路径 `/mnt/openlist/`
+    strm-content-base: /mnt/openlist
+    # 是否对路径分段进行 URL 编码, 默认: true
+    # 设置为 false 后, 生成的 strm 内容将保留原始字符 (不编码)
+    strm-content-escape: false
+    # 是否在 strm 内容中附加签名参数, 默认: true
+    # 设置为 false 后, 生成的 strm 内容不包含 `?sign=` 片段
+    strm-content-with-sign: false
     # 音乐媒体容器, 生成的是与媒体同名的空文件
     # 必须使用本项目反代 openlist 才可以正常播放
     # 必须开启 ffmpeg 辅助才能解析音频时长以及音乐标签数据到空文件中, !!有风控风险谨慎开启!!

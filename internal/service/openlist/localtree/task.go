@@ -135,17 +135,53 @@ type StrmWriter struct{}
 
 // OpenlistPath 生成媒体的 openlist http 访问地址
 func (sw *StrmWriter) OpenlistPath(task FileTask) string {
-	segs := strings.Split(strings.TrimPrefix(task.Path, "/"), "/")
-	for i, seg := range segs {
-		segs[i] = url.PathEscape(seg)
-	}
+    segs := strings.Split(strings.TrimPrefix(task.Path, "/"), "/")
+    for i, seg := range segs {
+        segs[i] = url.PathEscape(seg)
+    }
 
-	return fmt.Sprintf(
-		"%s/d/%s?sign=%s",
-		config.C.Openlist.Host,
-		strings.Join(segs, "/"),
-		task.Sign,
-	)
+    return fmt.Sprintf(
+        "%s/d/%s?sign=%s",
+        config.C.Openlist.Host,
+        strings.Join(segs, "/"),
+        task.Sign,
+    )
+}
+
+// StrmContent 生成写入到 strm 文件内的内容
+// 支持自定义路径前缀和可选的 URL 编码
+func (sw *StrmWriter) StrmContent(task FileTask) string {
+    // 处理路径分段编码
+    rawPath := strings.TrimPrefix(task.Path, "/")
+    segs := strings.Split(rawPath, "/")
+    escape := true
+    if cfg := config.C.Openlist.LocalTreeGen; cfg != nil && cfg.StrmContentEscape != nil {
+        escape = *cfg.StrmContentEscape
+    }
+    if escape {
+        for i, seg := range segs {
+            segs[i] = url.PathEscape(seg)
+        }
+    }
+
+    // 处理前缀, 默认使用 `${openlist.host}/d`
+    base := strings.TrimSpace(config.C.Openlist.LocalTreeGen.StrmContentBase)
+    if base == "" {
+        base = fmt.Sprintf("%s/d", strings.TrimRight(config.C.Openlist.Host, "/"))
+    }
+    base = strings.TrimRight(base, "/")
+
+    // 根据配置决定是否附加签名参数
+    withSign := true
+    if cfg := config.C.Openlist.LocalTreeGen; cfg != nil && cfg.StrmContentWithSign != nil {
+        withSign = *cfg.StrmContentWithSign
+    }
+
+    pathPart := fmt.Sprintf("%s/%s", base, strings.Join(segs, "/"))
+    if withSign && task.Sign != "" {
+        return fmt.Sprintf("%s?sign=%s", pathPart, task.Sign)
+    }
+    return pathPart
 }
 
 // Path 将 openlist 文件路径中的文件名
@@ -157,9 +193,9 @@ func (sw *StrmWriter) Path(path string) string {
 
 // Write 将文件信息写入到本地文件系统中
 func (sw *StrmWriter) Write(task FileTask, localPath string) error {
-	if err := os.WriteFile(localPath, []byte(sw.OpenlistPath(task)), os.ModePerm); err != nil {
-		return err
-	}
+    if err := os.WriteFile(localPath, []byte(sw.StrmContent(task)), os.ModePerm); err != nil {
+        return err
+    }
 
 	abs, err := filepath.Abs(localPath)
 	if err != nil {
