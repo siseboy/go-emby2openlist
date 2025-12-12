@@ -279,6 +279,13 @@ func (s *Synchronizer) handleSyncTasks(okTaskChan chan<- FileTask) {
 					continue
 				}
 
+				if task.IsDir {
+					name := filepath.Base(task.Path)
+					if cfg.IsIgnoreDirName(name) {
+						continue
+					}
+				}
+
 				// 处理任务
 				if task.IsDir {
 					if err := handleDir(task); err != nil {

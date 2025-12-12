@@ -57,6 +57,9 @@ type LocalTreeGen struct {
 	// IgnoreContainers 忽略指定的容器
 	IgnoreContainers string `yaml:"ignore-containers"`
 
+    // IgnoreDirNames 忽略的目录名, 以英文逗号分割
+    IgnoreDirNames string `yaml:"ignore-dirnames"`
+
 	// StrmContentBase 生成的 strm 内容路径前缀, 可为空
 	// 为空时默认使用 `${openlist.host}/d`
 	StrmContentBase string `yaml:"strm-content-base"`
@@ -83,6 +86,9 @@ type LocalTreeGen struct {
 
 	// ignoreContainers 忽略指定容器集合 便于快速查询
 	ignoreContainers map[string]struct{}
+
+	// ignoreDirNames 忽略的目录名集合 便于快速查询
+	ignoreDirNames map[string]struct{}
 }
 
 // Init 配置初始化
@@ -148,6 +154,16 @@ func (ltg *LocalTreeGen) Init() error {
 		ltg.ignoreContainers[strings.ToLower(s)] = struct{}{}
 	}
 
+    ss = strings.Split(strings.TrimSpace(ltg.IgnoreDirNames), ",")
+    ltg.ignoreDirNames = make(map[string]struct{}, len(ss))
+    for _, s := range ss {
+        s = strings.TrimSpace(s)
+        if s == "" {
+            continue
+        }
+        ltg.ignoreDirNames[s] = struct{}{}
+    }
+
 	// 处理 strm 内容编码开关默认值
 	if ltg.StrmContentEscape == nil {
 		v := true
@@ -186,9 +202,14 @@ func (ltg *LocalTreeGen) IsMusic(container string) bool {
 
 // IsIgnore 判断一个容器是否需要被忽略
 func (ltg *LocalTreeGen) IsIgnore(container string) bool {
-	container = strings.ToLower(container)
-	_, ok := ltg.ignoreContainers[container]
-	return ok
+    container = strings.ToLower(container)
+    _, ok := ltg.ignoreContainers[container]
+    return ok
+}
+
+func (ltg *LocalTreeGen) IsIgnoreDirName(name string) bool {
+    _, ok := ltg.ignoreDirNames[name]
+    return ok
 }
 
 // IsValidPrefix 判断一个 openlist 路径是否在扫描前缀的范围中

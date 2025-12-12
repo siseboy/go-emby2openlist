@@ -87,6 +87,9 @@ openlist:
       - /电视剧
     # 忽略指定容器, 避免触发源文件下载到本地
     ignore-containers: jpg,jpeg,png,txt,nfo,md
+    # 忽略指定目录名 (匹配最后一级目录名, 不区分大小写)
+    # 示例: 忽略群晖自动生成的 @eaDir 目录
+    ignore-dirnames: "@eaDir"    
     # 同步线程数
     threads: 8
 
