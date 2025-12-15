@@ -13,8 +13,7 @@ COPY go.mod go.sum ./
 # 下载依赖
 RUN go mod download
 
-# 复制源码
-COPY cmd cmd
+# 复制源码（删除 cmd 相关行，保留实际存在的 internal 和 main.go）
 COPY internal internal
 COPY main.go main.go
 
@@ -37,7 +36,7 @@ COPY --from=builder /app/main .
 
 # 暴露端口
 EXPOSE 8095
-EXPOSE 8094
+EXPOSE 8090
 
 # 运行应用程序
 CMD ["./main"]
