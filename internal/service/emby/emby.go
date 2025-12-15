@@ -15,6 +15,7 @@ import (
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/util/https"
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/util/jsons"
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/util/logs"
+	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/web/webport"
 
 	"github.com/gin-gonic/gin"
 )
@@ -168,4 +169,71 @@ func ProxyRoot(c *gin.Context) {
 	buf := bytess.CommonFixedBuffer()
 	defer buf.PutBack()
 	io.CopyBuffer(c.Writer, resp.Body, buf.Bytes())
+}
+
+// ProxyAndRewriteSystemInfo 代理 System Info 并重写端口信息
+func ProxyAndRewriteSystemInfo(c *gin.Context) {
+	res, ok := proxyAndSetRespHeader(c)
+	if !ok {
+		return
+	}
+	body := res.Data
+
+	curPortStr := func() string {
+		h := c.Request.Host
+		if strings.Contains(h, ":") {
+			parts := strings.Split(h, ":")
+			return parts[len(parts)-1]
+		}
+		return webport.HTTP
+	}()
+	curPort, _ := strconv.Atoi(curPortStr)
+
+	originPort := 0
+	if p, ok := body.Attr("WebSocketPortNumber").Int(); ok {
+		originPort = p
+	}
+	if originPort == 0 {
+		if p, ok := body.Attr("HttpServerPortNumber").Int(); ok {
+			originPort = p
+		}
+	}
+
+	rewriteStr := func(s string) string {
+		if originPort == 0 || curPort == 0 {
+			return s
+		}
+		return strings.ReplaceAll(s, strconv.Itoa(originPort), strconv.Itoa(curPort))
+	}
+
+	body.Put("WebSocketPortNumber", jsons.FromValue(curPort))
+	if _, ok := body.Attr("HttpServerPortNumber").Done(); ok {
+		body.Put("HttpServerPortNumber", jsons.FromValue(curPort))
+	}
+
+	if arr, ok := body.Attr("LocalAddresses").Done(); ok && arr.Type() == jsons.JsonTypeArr {
+		arr.RangeArr(func(_ int, v *jsons.Item) error {
+			if s, ok := v.Ti().String(); ok {
+				v.Ti().Set(rewriteStr(s))
+			}
+			return nil
+		})
+	}
+	if arr, ok := body.Attr("RemoteAddresses").Done(); ok && arr.Type() == jsons.JsonTypeArr {
+		arr.RangeArr(func(_ int, v *jsons.Item) error {
+			if s, ok := v.Ti().String(); ok {
+				v.Ti().Set(rewriteStr(s))
+			}
+			return nil
+		})
+	}
+
+	if s, ok := body.Attr("LocalAddress").String(); ok {
+		body.Put("LocalAddress", jsons.FromValue(rewriteStr(s)))
+	}
+	if s, ok := body.Attr("WanAddress").String(); ok {
+		body.Put("WanAddress", jsons.FromValue(rewriteStr(s)))
+	}
+
+	jsons.OkResp(c.Writer, body)
 }

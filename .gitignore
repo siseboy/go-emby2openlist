@@ -1,10 +1,5 @@
 config.yml
 *debug*
-ssl/*crt
-ssl/*key
 .DS_Store
-custom-js/*.js
-custom-css/*.css
-openlist-local-tree
-lib
+localtree
 dist

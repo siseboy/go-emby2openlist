@@ -3,8 +3,6 @@ package config
 import (
 	"fmt"
 	"strings"
-
-	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/service/lib/ffmpeg"
 )
 
 type Openlist struct {
@@ -33,17 +31,8 @@ type LocalTreeGen struct {
 	// Enable 是否启用
 	Enable bool `yaml:"enable"`
 
-	// FFmpegEnable 是否启用 ffmpeg
-	FFmpegEnable bool `yaml:"ffmpeg-enable"`
-
-	// VirtualContainers 虚拟媒体容器, 原始串, 以英文逗号分割
-	VirtualContainers string `yaml:"virtual-containers"`
-
 	// StrmContainers strm 媒体容器, 原始串, 以英文逗号分割
 	StrmContainers string `yaml:"strm-containers"`
-
-	// MusicContainers 音乐媒体容器, 原始串, 以英文逗号分割
-	MusicContainers string `yaml:"music-containers"`
 
 	// AutoRemoveMaxCount 自动删除文件的最大数量
 	AutoRemoveMaxCount int `yaml:"auto-remove-max-count"`
@@ -57,8 +46,11 @@ type LocalTreeGen struct {
 	// IgnoreContainers 忽略指定的容器
 	IgnoreContainers string `yaml:"ignore-containers"`
 
-    // IgnoreDirNames 忽略的目录名, 以英文逗号分割
-    IgnoreDirNames string `yaml:"ignore-dirnames"`
+	// IgnoreDirNames 忽略的目录名, 以英文逗号分割
+	IgnoreDirNames string `yaml:"ignore-dirnames"`
+
+	// KeepSuffixes 保护的本地文件后缀, 以英文逗号分割
+	KeepSuffixes string `yaml:"keep-suffixes"`
 
 	// StrmContentBase 生成的 strm 内容路径前缀, 可为空
 	// 为空时默认使用 `${openlist.host}/d`
@@ -75,32 +67,23 @@ type LocalTreeGen struct {
 	// Threads 同步线程数
 	Threads int `yaml:"threads"`
 
-	// virtualContainers 虚拟媒体容器集合 便于快速查询
-	virtualContainers map[string]struct{}
-
 	// strmContainers strm 媒体容器集合 便于快速查询
 	strmContainers map[string]struct{}
-
-	// musicContainers 音乐媒体容器集合 便于快速查询
-	musicContainers map[string]struct{}
 
 	// ignoreContainers 忽略指定容器集合 便于快速查询
 	ignoreContainers map[string]struct{}
 
 	// ignoreDirNames 忽略的目录名集合 便于快速查询
 	ignoreDirNames map[string]struct{}
+
+	// keepSuffixes 保护的本地文件后缀集合
+	keepSuffixes map[string]struct{}
 }
 
 // Init 配置初始化
 func (ltg *LocalTreeGen) Init() error {
 	if !ltg.Enable {
 		return nil
-	}
-
-	if ltg.FFmpegEnable {
-		if err := ffmpeg.AutoDownloadExec(BasePath); err != nil {
-			return fmt.Errorf("ffmpeg 初始化失败: %w", err)
-		}
 	}
 
 	if ltg.AutoRemoveMaxCount < 0 {
@@ -130,22 +113,12 @@ func (ltg *LocalTreeGen) Init() error {
 		return fmt.Errorf("无效同步线程数: [%d], 必须配置为大于 0 的值", ltg.Threads)
 	}
 
-	ss := strings.Split(strings.TrimSpace(ltg.VirtualContainers), ",")
-	ltg.virtualContainers = make(map[string]struct{}, len(ss))
-	for _, s := range ss {
-		ltg.virtualContainers[strings.ToLower(s)] = struct{}{}
-	}
+	var ss []string
 
 	ss = strings.Split(strings.TrimSpace(ltg.StrmContainers), ",")
 	ltg.strmContainers = make(map[string]struct{}, len(ss))
 	for _, s := range ss {
 		ltg.strmContainers[strings.ToLower(s)] = struct{}{}
-	}
-
-	ss = strings.Split(strings.TrimSpace(ltg.MusicContainers), ",")
-	ltg.musicContainers = make(map[string]struct{}, len(ss))
-	for _, s := range ss {
-		ltg.musicContainers[strings.ToLower(s)] = struct{}{}
 	}
 
 	ss = strings.Split(strings.TrimSpace(ltg.IgnoreContainers), ",")
@@ -154,15 +127,25 @@ func (ltg *LocalTreeGen) Init() error {
 		ltg.ignoreContainers[strings.ToLower(s)] = struct{}{}
 	}
 
-    ss = strings.Split(strings.TrimSpace(ltg.IgnoreDirNames), ",")
-    ltg.ignoreDirNames = make(map[string]struct{}, len(ss))
-    for _, s := range ss {
-        s = strings.TrimSpace(s)
-        if s == "" {
-            continue
-        }
-        ltg.ignoreDirNames[s] = struct{}{}
-    }
+	ss = strings.Split(strings.TrimSpace(ltg.IgnoreDirNames), ",")
+	ltg.ignoreDirNames = make(map[string]struct{}, len(ss))
+	for _, s := range ss {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		ltg.ignoreDirNames[s] = struct{}{}
+	}
+
+	ss = strings.Split(strings.TrimSpace(ltg.KeepSuffixes), ",")
+	ltg.keepSuffixes = make(map[string]struct{}, len(ss))
+	for _, s := range ss {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s == "" {
+			continue
+		}
+		ltg.keepSuffixes[s] = struct{}{}
+	}
 
 	// 处理 strm 内容编码开关默认值
 	if ltg.StrmContentEscape == nil {
@@ -179,13 +162,6 @@ func (ltg *LocalTreeGen) Init() error {
 	return nil
 }
 
-// IsVirtual 判断一个容器是否属于虚拟容器
-func (ltg *LocalTreeGen) IsVirtual(container string) bool {
-	container = strings.ToLower(container)
-	_, ok := ltg.virtualContainers[container]
-	return ok
-}
-
 // IsStrm 判断一个容器是否属于 strm 容器
 func (ltg *LocalTreeGen) IsStrm(container string) bool {
 	container = strings.ToLower(container)
@@ -193,23 +169,16 @@ func (ltg *LocalTreeGen) IsStrm(container string) bool {
 	return ok
 }
 
-// IsMusic 判断一个容器是否属于音乐容器
-func (ltg *LocalTreeGen) IsMusic(container string) bool {
+// IsIgnore 判断一个容器是否需要被忽略
+func (ltg *LocalTreeGen) IsIgnore(container string) bool {
 	container = strings.ToLower(container)
-	_, ok := ltg.musicContainers[container]
+	_, ok := ltg.ignoreContainers[container]
 	return ok
 }
 
-// IsIgnore 判断一个容器是否需要被忽略
-func (ltg *LocalTreeGen) IsIgnore(container string) bool {
-    container = strings.ToLower(container)
-    _, ok := ltg.ignoreContainers[container]
-    return ok
-}
-
 func (ltg *LocalTreeGen) IsIgnoreDirName(name string) bool {
-    _, ok := ltg.ignoreDirNames[name]
-    return ok
+	_, ok := ltg.ignoreDirNames[name]
+	return ok
 }
 
 // IsValidPrefix 判断一个 openlist 路径是否在扫描前缀的范围中
@@ -218,6 +187,20 @@ func (ltg *LocalTreeGen) IsValidPrefix(path string) bool {
 		if strings.HasPrefix(path, prefix) || strings.HasPrefix(prefix, path) {
 			return true
 		}
+	}
+	return false
+}
+
+// IsKeepLocalPath 判断一个本地路径是否应该被保护
+func (ltg *LocalTreeGen) IsKeepLocalPath(fullPath string) bool {
+	name := fullPath
+	idx := strings.LastIndex(name, ".")
+	if idx < 0 {
+		return false
+	}
+	ext := strings.TrimPrefix(strings.ToLower(name[idx:]), ".")
+	if _, ok := ltg.keepSuffixes[ext]; ok {
+		return true
 	}
 	return false
 }

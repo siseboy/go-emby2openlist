@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -15,7 +16,6 @@ import (
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/service/path"
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/util/https"
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/util/logs"
-	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/util/strs"
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/util/trys"
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/util/urls"
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/web/cache"
@@ -23,38 +23,37 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Redirect2Transcode 将 master 请求重定向到本地 ts 代理
-func Redirect2Transcode(c *gin.Context) {
-	templateId := c.Query("template_id")
-	if strs.AnyEmpty(templateId) {
-		// 尝试从 mediaSourceId 中获取 templateId
-		itemInfo, err := resolveItemInfo(c, RouteTranscode)
-		if checkErr(c, err) {
-			return
+func isPrivateHost(host string) bool {
+	if host == "" {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() {
+		return true
+	}
+	if v4 := ip.To4(); v4 != nil {
+		if v4[0] == 10 {
+			return true
 		}
-		templateId = itemInfo.MsInfo.TemplateId
+		if v4[0] == 172 && v4[1] >= 16 && v4[1] <= 31 {
+			return true
+		}
+		if v4[0] == 192 && v4[1] == 168 {
+			return true
+		}
+		return false
 	}
-
-	apiKey := c.Query(QueryApiKeyName)
-	openlistPath := c.Query("openlist_path")
-	if strs.AnyEmpty(templateId) {
-		ProxyOrigin(c)
-		return
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
 	}
-
-	// 只有 template id 时, 需要先获取 openlist path
-	if strs.AnyEmpty(openlistPath) {
-		Redirect2OpenlistLink(c)
-		return
-	}
-
-	tu, _ := url.Parse(https.ClientRequestHost(c.Request) + "/videos/proxy_playlist")
-	q := tu.Query()
-	q.Set("openlist_path", openlistPath)
-	q.Set(QueryApiKeyName, apiKey)
-	q.Set("template_id", templateId)
-	tu.RawQuery = q.Encode()
-	c.Redirect(http.StatusTemporaryRedirect, tu.String())
+	b0 := ip[0]
+	return b0&0xfe == 0xfc
 }
 
 // Redirect2OpenlistLink 重定向资源到 openlist 网盘直链
@@ -72,20 +71,7 @@ func Redirect2OpenlistLink(c *gin.Context) {
 	}
 	logs.Info("解析到的 itemInfo: %v", itemInfo)
 
-	// 2 如果请求的是转码资源, 重定向到本地的 m3u8 代理服务
-	msInfo := itemInfo.MsInfo
-	useTranscode := !msInfo.Empty && msInfo.Transcode
-	if useTranscode && msInfo.OpenlistPath != "" {
-		u, _ := url.Parse(strings.ReplaceAll(MasterM3U8UrlTemplate, "${itemId}", itemInfo.Id))
-		q := u.Query()
-		q.Set("template_id", itemInfo.MsInfo.TemplateId)
-		q.Set(QueryApiKeyName, itemInfo.ApiKey)
-		q.Set("openlist_path", itemInfo.MsInfo.OpenlistPath)
-		u.RawQuery = q.Encode()
-		logs.Success("重定向 playlist: %s", u.String())
-		c.Redirect(http.StatusTemporaryRedirect, u.String())
-		return
-	}
+	// 2 直接处理直链，不走本地转码代理
 
 	// 3 请求资源在 Emby 中的 Path 参数
 	embyPath, err := getEmbyFileLocalPath(itemInfo)
@@ -123,7 +109,7 @@ func Redirect2OpenlistLink(c *gin.Context) {
 
 	// 5 如果是本地地址, 回源处理
 	if strings.HasPrefix(embyPath, config.C.Emby.LocalMediaRoot) {
-		logs.Info("本地媒体: %s, 回源处理", embyPath)
+		logs.Info("本地媒体: %s, 回源处理")
 		newUri := strings.Replace(c.Request.RequestURI, "stream", "original", 1)
 		c.Redirect(http.StatusTemporaryRedirect, newUri)
 		return
@@ -132,8 +118,8 @@ func Redirect2OpenlistLink(c *gin.Context) {
 	// 6 请求 openlist 资源
 	fi := openlist.FetchInfo{
 		Header:       c.Request.Header.Clone(),
-		UseTranscode: useTranscode,
-		Format:       msInfo.TemplateId,
+		UseTranscode: false,
+		Format:       "",
 	}
 	openlistPathRes := path.Emby2Openlist(embyPath)
 
@@ -152,21 +138,21 @@ func Redirect2OpenlistLink(c *gin.Context) {
 		// 处理直链
 		if !fi.UseTranscode {
 			res.Data.Url = config.C.Emby.Strm.MapPath(res.Data.Url)
+			if u, err := url.Parse(res.Data.Url); err == nil {
+				if isPrivateHost(u.Hostname()) {
+					logs.Warn("本地媒体, 回源处理")
+					ProxyOrigin(c)
+					return true
+				}
+			}
 			logs.Success("请求成功, 重定向到: %s", res.Data.Url)
 			c.Header(cache.HeaderKeyExpired, cache.Duration(time.Minute*10))
 			c.Redirect(http.StatusTemporaryRedirect, res.Data.Url)
 			return true
 		}
 
-		// 代理转码 m3u
-		u, _ := url.Parse(https.ClientRequestHost(c.Request) + "/videos/proxy_playlist")
-		q := u.Query()
-		q.Set("template_id", itemInfo.MsInfo.TemplateId)
-		q.Set(QueryApiKeyName, itemInfo.ApiKey)
-		q.Set("openlist_path", openlist.PathEncode(path))
-		u.RawQuery = q.Encode()
-		c.Redirect(http.StatusTemporaryRedirect, u.String())
-		return true
+		// 已移除转码代理逻辑
+		return false
 	}
 
 	if openlistPathRes.Success && handleOpenlistResource(openlistPathRes.Path) {

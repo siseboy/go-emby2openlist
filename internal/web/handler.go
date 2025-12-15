@@ -5,6 +5,7 @@ import (
 	"regexp"
 
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/constant"
+	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/web/webport"
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/util/logs"
 	"github.com/gin-gonic/gin"
 )
@@ -20,7 +21,13 @@ func globalDftHandler(c *gin.Context) {
 	}
 
 	// 依次匹配路由规则, 找到其他的处理器
-	for _, rule := range rules {
+	var curRules [][2]any
+	if c.GetString(webport.GinKey) == webport.NAVI {
+		curRules = rulesNavi
+	} else {
+		curRules = rulesEmby
+	}
+	for _, rule := range curRules {
 		reg := rule[0].(*regexp.Regexp)
 		if reg.MatchString(c.Request.RequestURI) {
 			c.Set(MatchRouteKey, reg.String())

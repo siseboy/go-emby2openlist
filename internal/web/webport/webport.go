@@ -1,8 +1,8 @@
 package webport
 
 var (
-	HTTPS = "8094"
-	HTTP  = "8095"
+	HTTP = "8095"
+	NAVI = "8090"
 )
 
 const (

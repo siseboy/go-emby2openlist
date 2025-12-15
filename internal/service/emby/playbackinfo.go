@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -89,7 +90,6 @@ func TransferPlaybackInfo(c *gin.Context) {
 	}
 
 	var haveReturned = errors.New("have returned")
-	resChans := make([]chan []*jsons.Item, 0, mediaSources.Len())
 	err = mediaSources.RangeArr(func(_ int, source *jsons.Item) error {
 		simplifyMediaName(source)
 
@@ -142,20 +142,14 @@ func TransferPlaybackInfo(c *gin.Context) {
 			return nil
 		}
 
-		// 添加转码 MediaSource 获取
-		cfg := config.C.VideoPreview
-		if !msInfo.Empty || !cfg.Enable || !cfg.ContainerValid(source.Attr("Container").Val().(string)) {
-			return nil
-		}
-		resChan := make(chan []*jsons.Item, 1)
-		go findVideoPreviewInfos(source, itemInfo.ApiKey, resChan)
-		resChans = append(resChans, resChan)
 		return nil
 	})
 
 	if err == haveReturned {
 		return
 	}
+
+	resJson.Put("MediaSources", sortMediaSourcesArr(mediaSources))
 
 	defer func() {
 		// 缓存 12h
@@ -165,16 +159,85 @@ func TransferPlaybackInfo(c *gin.Context) {
 		c.Header(cache.HeaderKeySpaceKey, calcPlaybackInfoSpaceCacheKey(itemInfo))
 	}()
 
-	// 收集异步请求的转码资源信息
-	for _, resChan := range resChans {
-		previewInfos := <-resChan
-		if len(previewInfos) > 0 {
-			mediaSources.Append(previewInfos...)
-		}
-	}
-
 	https.CloneHeader(c.Writer, respHeader)
 	jsons.OkResp(c.Writer, resJson)
+}
+
+func sortMediaSourcesArr(arr *jsons.Item) *jsons.Item {
+	if arr == nil || arr.Empty() || arr.Type() != jsons.JsonTypeArr {
+		return arr
+	}
+	type pair struct {
+		idx   int
+		score int
+	}
+	ps := make([]pair, 0, arr.Len())
+	arr.RangeArr(func(i int, ms *jsons.Item) error {
+		ps = append(ps, pair{idx: i, score: mediaSourceScore(ms)})
+		return nil
+	})
+	sort.Slice(ps, func(i, j int) bool { return ps[i].score > ps[j].score })
+	na := jsons.NewEmptyArr()
+	for _, p := range ps {
+		v, ok := arr.Idx(p.idx).Done()
+		if ok {
+			na.Append(v)
+		}
+	}
+	return na
+}
+
+func mediaSourceScore(ms *jsons.Item) int {
+	s := 0
+	if b, _ := ms.Attr("IsRemote").Bool(); !b {
+		s += 30
+	}
+	if p, _ := ms.Attr("Protocol").String(); strings.EqualFold(p, "File") {
+		s += 20
+	}
+	if ctn, _ := ms.Attr("Container").String(); ctn != "" {
+		c := strings.ToLower(ctn)
+		if strings.Contains(c, "mp4") {
+			s += 12
+		} else if strings.Contains(c, "mkv") {
+			s += 10
+		} else if strings.Contains(c, "mov") {
+			s += 8
+		} else if strings.Contains(c, "flv") {
+			s += 5
+		}
+	}
+	vc := strings.ToLower(pickVideoCodec(ms))
+	if vc == "h264" {
+		s += 8
+	} else if vc == "hevc" || vc == "h265" {
+		s += 6
+	} else if vc == "av1" {
+		s += 4
+	} else if vc == "vp9" || vc == "vp8" {
+		s += 2
+	}
+	return s
+}
+
+func pickVideoCodec(ms *jsons.Item) string {
+	if v, ok := ms.Attr("VideoCodec").String(); ok && v != "" {
+		return v
+	}
+	streams, ok := ms.Attr("MediaStreams").Done()
+	if !ok || streams.Empty() || streams.Type() != jsons.JsonTypeArr {
+		return ""
+	}
+	var codec string
+	streams.RangeArr(func(_ int, s *jsons.Item) error {
+		t, _ := s.Attr("Type").String()
+		if strings.EqualFold(t, "Video") {
+			codec, _ = s.Attr("Codec").String()
+			return jsons.ErrBreakRange
+		}
+		return nil
+	})
+	return codec
 }
 
 // handleSpecialPlayback 判断如果请求的 PlaybackInfo 信息是特殊类型, 直接代理回源服务
@@ -394,59 +457,6 @@ func LoadCacheItems(c *gin.Context) {
 	defer func() {
 		jsons.OkResp(c.Writer, resJson)
 	}()
-
-	// 未开启转码资源获取功能
-	if !config.C.VideoPreview.Enable {
-		return
-	}
-
-	// 只处理特定类型的 Items 响应
-	itemType, _ := resJson.Attr("Type").String()
-	if !ValidCacheItemsTypeRegex.MatchString(itemType) {
-		return
-	}
-
-	// 特定客户端不处理
-	if UnvalidCacheItemsUARegex.MatchString(c.GetHeader("User-Agent")) {
-		return
-	}
-
-	// 解析出 ItemId
-	itemInfo, err := resolveItemInfo(c, RouteItems)
-	if err != nil {
-		return
-	}
-	logs.Info("itemInfo 解析结果: %s", itemInfo)
-
-	// coverMediaSources 解析 PlaybackInfo 中的 MediaSources 属性
-	// 并覆盖到当前请求的响应中
-	// 成功覆盖时, 返回 true
-	coverMediaSources := func(info *jsons.Item) bool {
-		cacheMs, ok := info.Attr("MediaSources").Done()
-		if !ok || cacheMs.Type() != jsons.JsonTypeArr {
-			return false
-		}
-		resJson.Put("MediaSources", cacheMs)
-		c.Writer.Header().Del("Content-Length")
-		return true
-	}
-
-	// 获取附带转码信息的 PlaybackInfo 数据
-	spaceCache, ok := getPlaybackInfoByCacheSpace(itemInfo)
-	if ok {
-		cacheBody, err := spaceCache.JsonBody()
-		if err == nil && coverMediaSources(cacheBody) {
-			return
-		}
-	}
-
-	// 缓存空间中没有当前 Item 的 PlaybackInfo 数据, 手动请求
-	bodyJson, err := fetchFullPlaybackInfo(itemInfo)
-	if err != nil {
-		logs.Warn("更新 Items 缓存异常: %v", err)
-		return
-	}
-	coverMediaSources(bodyJson)
 }
 
 // fetchFullPlaybackInfo 请求全量的 PlaybackInfo 信息

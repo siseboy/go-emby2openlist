@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/config"
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/constant"
@@ -112,6 +113,9 @@ func DownloadStrategyChecker() gin.HandlerFunc {
 	}
 
 	return func(c *gin.Context) {
+		if strings.HasPrefix(strings.ToLower(c.Request.URL.Path), "/rest/") {
+			return
+		}
 		// 放行非下载接口
 		var flag bool
 		for _, route := range downloadRoutes {

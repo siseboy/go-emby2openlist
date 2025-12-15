@@ -3,7 +3,7 @@ package web
 import (
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/constant"
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/service/emby"
-	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/service/m3u8"
+	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/service/navidrome"
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/util/logs"
 
 	"github.com/gin-gonic/gin"
@@ -13,12 +13,17 @@ import (
 //
 // 每个规则为一个切片, 参数分别是: 正则表达式, 处理器
 var rules [][2]any
+var rulesEmby [][2]any
+var rulesNavi [][2]any
 
 func initRulePatterns() {
 	logs.Info("正在初始化路由规则...")
-	rules = compileRules([][2]any{
+	rulesEmby = compileRules([][2]any{
 		// websocket
 		{constant.Reg_Socket, emby.ProxySocket()},
+
+		// System Info 端口重写
+		{constant.Reg_SystemInfo, emby.ProxyAndRewriteSystemInfo},
 
 		// PlaybackInfo 接口
 		{constant.Reg_PlaybackInfo, emby.TransferPlaybackInfo},
@@ -47,18 +52,8 @@ func initRulePatterns() {
 
 		// 资源重定向到直链
 		{constant.Reg_ResourceStream, emby.Redirect2OpenlistLink},
-		// master 重定向到本地 m3u8 代理
-		{constant.Reg_ResourceMaster, emby.Redirect2Transcode},
-		// main 路由到直链接口
-		{constant.Reg_ResourceMain, emby.Redirect2Transcode},
 		// 处理 original 资源
 		{constant.Reg_ResourceOriginal, emby.ProxyOriginalResource},
-		// m3u8 转码播放列表
-		{constant.Reg_ProxyPlaylist, m3u8.ProxyPlaylist},
-		// ts 重定向到直链
-		{constant.Reg_ProxyTs, m3u8.ProxyTsLink},
-		// m3u8 字幕
-		{constant.Reg_ProxySubtitle, m3u8.ProxySubtitle},
 
 		// 资源下载, 重定向到直链
 		{constant.Reg_ItemDownload, emby.Redirect2OpenlistLink},
@@ -67,21 +62,18 @@ func initRulePatterns() {
 		// 处理图片请求
 		{constant.Reg_Images, emby.HandleImages},
 
-		// web cors 处理
-		{constant.Reg_VideoModWebDefined, emby.ChangeBaseVideoModuleCorsDefined},
-
-		// 代理首页, 注入自定义脚本
-		{constant.Reg_IndexHtml, emby.ProxyIndexHtml},
-		// 响应自定义脚本
-		{constant.Route_CustomJs, emby.ProxyCustomJs},
-		// 响应自定义样式
-		{constant.Route_CustomCss, emby.ProxyCustomCss},
-
 		// 根路径重定向到首页
 		{constant.Reg_Root, emby.ProxyRoot},
 
 		// 其余资源走重定向回源
 		{constant.Reg_All, emby.ProxyOrigin},
+	})
+	rulesNavi = compileRules([][2]any{
+		{constant.Reg_Root, navidrome.HandleRoot},
+		{constant.Reg_NaviEvents, navidrome.HandleSSEEvents},
+		{constant.Reg_NaviStream, navidrome.HandleStream},
+		{constant.Reg_NaviRestAll, navidrome.ProxyOrigin},
+		{constant.Reg_All, navidrome.ProxyOrigin},
 	})
 	logs.Success("路由规则初始化完成")
 }

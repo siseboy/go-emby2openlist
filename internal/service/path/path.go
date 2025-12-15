@@ -3,6 +3,7 @@ package path
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/AmbitiousJun/go-emby2openlist/v2/internal/config"
@@ -36,6 +37,11 @@ func Emby2Openlist(embyPath string) OpenlistPathRes {
 	embyPath = urls.TransferSlash(embyPath)
 	pathRoutes.WriteString("\n\n【Windows 反斜杠转换】 => " + embyPath)
 
+	if rp, err := filepath.EvalSymlinks(embyPath); err == nil && rp != "" {
+		embyPath = urls.TransferSlash(rp)
+		pathRoutes.WriteString("\n\n【符号链接解析】 => " + embyPath)
+	}
+
 	embyMount := config.C.Emby.MountPath
 	openlistFilePath := strings.TrimPrefix(embyPath, embyMount)
 	pathRoutes.WriteString("\n\n【移除 mount-path】 => " + openlistFilePath)
@@ -50,9 +56,8 @@ func Emby2Openlist(embyPath string) OpenlistPathRes {
 	rangeFunc := func() ([]string, error) {
 		filePath, err := SplitFromSecondSlash(openlistFilePath)
 		if err != nil {
-			return nil, fmt.Errorf("openlistFilePath 解析异常: %s, error: %v", openlistFilePath, err)
+			filePath = openlistFilePath
 		}
-
 		res := openlist.FetchFsList("/", nil)
 		if res.Code != http.StatusOK {
 			return nil, fmt.Errorf("请求 openlist fs list 接口异常: %s", res.Msg)
@@ -75,6 +80,7 @@ func Emby2Openlist(embyPath string) OpenlistPathRes {
 		Range:   rangeFunc,
 	}
 }
+
 
 // SplitFromSecondSlash 找到给定字符串 str 中第二个 '/' 字符的位置
 // 并以该位置为首字符切割剩余的子串返回

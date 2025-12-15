@@ -59,16 +59,31 @@ func ApiKeyChecker() gin.HandlerFunc {
 		regexp.MustCompile(constant.Reg_PlaybackInfo),
 		regexp.MustCompile(constant.Reg_ItemDownload),
 		regexp.MustCompile(constant.Reg_ItemSyncDownload),
-		regexp.MustCompile(constant.Reg_ProxyPlaylist),
-		regexp.MustCompile(constant.Reg_ProxyTs),
-		regexp.MustCompile(constant.Reg_ProxySubtitle),
 		regexp.MustCompile(constant.Reg_ShowEpisodes),
 		regexp.MustCompile(constant.Reg_UserItems),
 	}
 
 	return func(c *gin.Context) {
+		if strings.HasPrefix(strings.ToLower(c.Request.URL.Path), "/rest/") {
+			return
+		}
 		// 1 取出 api_key
 		kType, kName, apiKey := getApiKey(c)
+
+		// 1.1 如果原始请求未携带令牌且配置了默认令牌, 注入到 query
+		if apiKey == "" && config.C.Emby != nil && config.C.Emby.ApiKey != "" {
+			q := c.Request.URL.Query()
+			if q.Get(QueryApiKeyName) == "" && q.Get(QueryTokenName) == "" && c.GetHeader(HeaderAuthName) == "" && c.GetHeader(HeaderFullAuthName) == "" {
+				q.Set(QueryApiKeyName, config.C.Emby.ApiKey)
+				c.Request.URL.RawQuery = q.Encode()
+				if c.Request.URL.RawQuery != "" {
+					c.Request.RequestURI = c.Request.URL.Path + "?" + c.Request.URL.RawQuery
+				} else {
+					c.Request.RequestURI = c.Request.URL.Path
+				}
+				kType, kName, apiKey = Query, QueryApiKeyName, config.C.Emby.ApiKey
+			}
+		}
 
 		// 2 如果该 key 已经是被信任的, 跳过校验
 		if _, ok := validApiKeys.Load(apiKey); ok {
@@ -174,5 +189,10 @@ func getApiKey(c *gin.Context) (keyType ApiKeyType, keyName string, apiKey strin
 		return
 	}
 
+	if config.C.Emby != nil && config.C.Emby.ApiKey != "" {
+		keyName = QueryApiKeyName
+		keyType = Query
+		apiKey = config.C.Emby.ApiKey
+	}
 	return
 }

@@ -62,6 +62,9 @@ func CacheableRouteMarker() gin.HandlerFunc {
 				return
 			}
 		}
+		if regexp.MustCompile(constant.Reg_NaviStream).MatchString(c.Request.RequestURI) {
+			return
+		}
 		c.Header(HeaderKeyExpired, "-1")
 	}
 }

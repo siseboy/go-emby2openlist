@@ -58,6 +58,8 @@ type Emby struct {
 	DownloadStrategy DlStrategy `yaml:"download-strategy"`
 	// LocalMediaRoot 本地媒体根路径
 	LocalMediaRoot string `yaml:"local-media-root"`
+	// ApiKey 默认令牌, 当客户端未提供时用于兜底
+	ApiKey string `yaml:"apikey"`
 }
 
 func (e *Emby) Init() error {

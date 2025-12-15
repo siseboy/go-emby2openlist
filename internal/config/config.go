@@ -12,17 +12,14 @@ import (
 
 type Config struct {
 	// Emby emby 相关配置
-	Emby *Emby `yaml:"emby"`
+	Emby      *Emby      `yaml:"emby"`
+	Navidrome *Navidrome `yaml:"navidrome"`
 	// Openlist openlist 相关配置
 	Openlist *Openlist `yaml:"openlist"`
-	// VideoPreview 网盘转码链接代理配置
-	VideoPreview *VideoPreview `yaml:"video-preview"`
 	// Path 路径相关配置
 	Path *Path `yaml:"path"`
 	// Cache 缓存相关配置
 	Cache *Cache `yaml:"cache"`
-	// Ssl ssl 相关配置
-	Ssl *Ssl `yaml:"ssl"`
 	// Log 日志相关配置
 	Log *Log `yaml:"log"`
 }
@@ -78,14 +75,6 @@ func ReadFromFile(path string) error {
 // ServerInternalRequestHost 服务内部自请求 host
 func ServerInternalRequestHost() string {
 	p := "http://127.0.0.1:" + webport.HTTP
-	if C == nil {
-		return p
-	}
-
-	// 只开启了 https 端口
-	if C.Ssl.Enable && C.Ssl.SinglePort {
-		p = "https://127.0.0.1:" + webport.HTTPS
-	}
 	return p
 }
 

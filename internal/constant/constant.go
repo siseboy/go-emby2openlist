@@ -1,11 +1,16 @@
 package constant
 
 const (
-	CurrentVersion = "v2.3.2"
+	CurrentVersion = "v2.4.0"
 	RepoAddr       = "https://github.com/AmbitiousJun/go-emby2openlist"
 )
 
+var ServerMode = "emby"
+
 const (
+	Reg_NaviRestAll  = `(?i)^/rest/.*`
+	Reg_NaviStream   = `(?i)^/rest/stream($|\?)`
+	Reg_NaviEvents   = `(?i)^/api/events($|\?)`
 	Reg_Socket       = `(?i)^/.*(socket|embywebsocket)`
 	Reg_PlaybackInfo = `(?i)^/.*items/.*/playbackinfo\??`
 
@@ -23,34 +28,22 @@ const (
 	Reg_VideoSubtitles = `(?i)^/.*videos/.*/subtitles`
 
 	Reg_ResourceStream   = `(?i)^/.*(videos|audio)/.*/(stream|universal)(\.\w+)?\??`
-	Reg_ResourceMaster   = `(?i)^/.*(videos|audio)/.*/(master)(\.\w+)?\??`
-	Reg_ResourceMain     = `(?i)^/.*(videos|audio)/.*/main.m3u8\??`
 	Reg_ResourceOriginal = `(?i)^/.*(videos|audio)/.*/original(\.\w+)?\??`
-
-	Reg_ProxyPlaylist = `(?i)^/.*videos/proxy_playlist\??`
-	Reg_ProxyTs       = `(?i)^/.*videos/proxy_ts\??`
-	Reg_ProxySubtitle = `(?i)^/.*videos/proxy_subtitle\??`
 
 	Reg_ItemDownload     = `(?i)^/.*items/\d+/download($|\?)`
 	Reg_ItemSyncDownload = `(?i)^/.*sync/jobitems/\d+/file($|\?)`
 
-	Reg_Images             = `(?i)^/.*images`
-	Reg_VideoModWebDefined = `(?i)^/web/modules/htmlvideoplayer/plugin.js`
-	Reg_Proxy2Origin       = `^/$|(?i)^.*(/web|/users|/artists|/genres|/similar|/shows|/system|/remote|/scheduledtasks)`
+	Reg_Images       = `(?i)^/.*images`
+	Reg_Proxy2Origin = `^/$|(?i)^.*(/web|/users|/artists|/genres|/similar|/shows|/system|/remote|/scheduledtasks)`
+	Reg_SystemInfo   = `(?i)^/.*/system/info($|\?)`
 
-	Reg_Root        = `(?i)^/$`
-	Reg_IndexHtml   = `(?i)^/web/index\.html`
-	Route_CustomJs  = `/ge2o/custom.js`
-	Route_CustomCss = `/ge2o/custom.css`
+	Reg_Root = `(?i)^/$`
 
 	Reg_All = `.*`
 )
 
 const (
 	RouteSubMatchGinKey = "routeSubMatches" // 路由匹配成功时, 会将匹配的正则结果存放到 Gin 上下文
-
-	CustomJsDirName  = "custom-js"  // 自定义脚本存放目录
-	CustomCssDirName = "custom-css" // 自定义样式存放目录
 
 	CommonDlUserAgent = "libmpv" // 通用的下载 UA
 )

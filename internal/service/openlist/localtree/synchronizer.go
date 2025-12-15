@@ -373,7 +373,11 @@ func (s *Synchronizer) updateLocalTree(okTaskChan <-chan FileTask, total, added,
 		}
 
 		path = strings.TrimPrefix(path, "/")
-		toDelete = append(toDelete, filepath.Join(s.baseDir, path))
+		abs := filepath.Join(s.baseDir, path)
+		if config.C.Openlist.LocalTreeGen.IsKeepLocalPath(abs) {
+			continue
+		}
+		toDelete = append(toDelete, abs)
 	}
 
 	maxCount := config.C.Openlist.LocalTreeGen.AutoRemoveMaxCount

@@ -11,7 +11,7 @@ import (
 )
 
 // DirName 存放目录树的本地目录名称
-const DirName = "openlist-local-tree"
+const DirName = "localtree"
 
 // Init 根据配置文件, 初始化本地目录树
 func Init() error {

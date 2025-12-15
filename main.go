@@ -47,8 +47,8 @@ func main() {
 
 // parseFlag 转换命令行参数
 func parseFlag() (dataRoot string) {
-	ph := flag.Int("p", 8095, "HTTP 服务监听端口")
-	phs := flag.Int("ps", 8094, "HTTPS 服务监听端口")
+	phEmby := flag.Int("p-emby", 8095, "Emby HTTP 服务监听端口")
+	phNavi := flag.Int("p-navi", 8090, "Navidrome HTTP 服务监听端口")
 	printVersion := flag.Bool("version", false, "查看程序版本")
 	dr := flag.String("dr", ".", "程序数据根目录")
 	flag.Parse()
@@ -67,16 +67,13 @@ func parseFlag() (dataRoot string) {
 		dataRoot = *dr
 	}
 
-	if *ph == *phs {
-		log.Fatal("HTTP 和 HTTPS 端口冲突")
-	}
-	webport.HTTP = strconv.Itoa(*ph)
-	webport.HTTPS = strconv.Itoa(*phs)
+	webport.HTTP = strconv.Itoa(*phEmby)
+	webport.NAVI = strconv.Itoa(*phNavi)
 	return
 }
 
 func printBanner() {
-	fmt.Printf(colors.ToYellow(`
+	fmt.Print(colors.ToYellow(`
                                  _           ___                        _ _     _   
                                 | |         |__ \                      | (_)   | |  
   __ _  ___ ______ ___ _ __ ___ | |__  _   _   ) |___  _ __   ___ _ __ | |_ ___| |_ 
@@ -86,7 +83,5 @@ func printBanner() {
   __/ |                                 __/ |         | |                           
  |___/                                 |___/          |_|                           
 
- Repository: %s
-    Version: %s
-`), constant.RepoAddr, constant.CurrentVersion)
+`))
 }
