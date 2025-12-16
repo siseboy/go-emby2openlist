@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -83,46 +84,52 @@ func LoadTaskWriter(container string) TaskWriter {
 // StrmWriter 写文件对应的 openlist strm 文件
 type StrmWriter struct{}
 
-// OpenlistPath 生成媒体的 openlist http 访问地址
-func (sw *StrmWriter) OpenlistPath(task FileTask) string {
-	raw := strings.TrimPrefix(task.Path, "/")
-	parts := strings.Split(raw, "/")
+func pathSegments(p string) []string {
+	p = strings.TrimPrefix(p, "/")
+	parts := strings.Split(p, "/")
 	segs := make([]string, 0, len(parts))
-	for _, seg := range parts {
-		if seg == "" {
+	for _, s := range parts {
+		if s == "" {
 			continue
 		}
-		segs = append(segs, url.PathEscape(seg))
+		segs = append(segs, s)
 	}
+	return segs
+}
 
-	return fmt.Sprintf(
-		"%s/d/%s?sign=%s",
-		config.C.Openlist.Host,
-		strings.Join(segs, "/"),
-		task.Sign,
-	)
+// OpenlistPath 生成媒体的 openlist http 访问地址
+func (sw *StrmWriter) OpenlistPath(task FileTask) string {
+	segs := pathSegments(task.Path)
+
+	cfg := config.C.Openlist
+	if cfg == nil {
+		return ""
+	}
+	hostURL, err := url.Parse(cfg.Host)
+	if err != nil || hostURL.Host == "" {
+		hostURL = &url.URL{Scheme: "https", Host: cfg.Host}
+	}
+	u := &url.URL{
+		Scheme: hostURL.Scheme,
+		Host:   hostURL.Host,
+		Path:   path.Join(hostURL.Path, "d", path.Join(segs...)),
+	}
+	if cfg.RequestWithSign != nil && *cfg.RequestWithSign && task.Sign != "" {
+		q := u.Query()
+		q.Set("sign", task.Sign)
+		u.RawQuery = q.Encode()
+	}
+	return u.String()
 }
 
 // StrmContent 生成写入到 strm 文件内的内容
-// 支持自定义路径前缀和可选的 URL 编码
+// 支持自定义路径前缀
 func (sw *StrmWriter) StrmContent(task FileTask) string {
-	rawPath := strings.TrimPrefix(task.Path, "/")
-	parts := strings.Split(rawPath, "/")
-	segs := make([]string, 0, len(parts))
-	escape := true
-	if cfg := config.C.Openlist.LocalTreeGen; cfg != nil && cfg.StrmContentEscape != nil {
-		escape = *cfg.StrmContentEscape
-	}
-	for _, seg := range parts {
-		if seg == "" {
-			continue
-		}
-		if !escape {
-			if strings.Contains(seg, "\\'") {
-				seg = strings.ReplaceAll(seg, "\\'", "'")
-			}
-			segs = append(segs, seg)
-			continue
+	rawSegs := pathSegments(task.Path)
+	segs := make([]string, 0, len(rawSegs))
+	for _, seg := range rawSegs {
+		if strings.Contains(seg, "\\'") {
+			seg = strings.ReplaceAll(seg, "\\'", "'")
 		}
 		segs = append(segs, url.PathEscape(seg))
 	}
@@ -134,16 +141,7 @@ func (sw *StrmWriter) StrmContent(task FileTask) string {
 	}
 	base = strings.TrimRight(base, "/")
 
-	// 根据配置决定是否附加签名参数
-	withSign := true
-	if cfg := config.C.Openlist.LocalTreeGen; cfg != nil && cfg.StrmContentWithSign != nil {
-		withSign = *cfg.StrmContentWithSign
-	}
-
 	pathPart := fmt.Sprintf("%s/%s", base, strings.Join(segs, "/"))
-	if withSign && task.Sign != "" {
-		return fmt.Sprintf("%s?sign=%s", pathPart, task.Sign)
-	}
 	return pathPart
 }
 

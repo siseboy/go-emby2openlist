@@ -82,6 +82,7 @@ func Redirect2OpenlistLink(c *gin.Context) {
 	// 4 如果是远程地址 (strm), 重定向处理
 	if urls.IsRemote(embyPath) {
 		finalPath := config.C.Emby.Strm.MapPath(embyPath)
+		finalPath = ensureOpenlistSignedLink(finalPath, c.Request.Header.Clone())
 		finalPath = getFinalRedirectLink(finalPath, c.Request.Header.Clone())
 		logs.Success("重定向 strm: %s", finalPath)
 		c.Header(cache.HeaderKeyExpired, cache.Duration(time.Minute*10))
@@ -250,4 +251,49 @@ func getFinalRedirectLink(originLink string, header http.Header) string {
 	}
 
 	return finalLink
+}
+
+// ensureOpenlistSignedLink 在 openlist 开启签名时为 /d/ 直链自动附加 ?sign=
+//
+// 仅处理路径形如: {host}/d/{path/to/file.ext}[?query]
+// 若 query 已包含 sign, 保持不变
+// 若无法获取 sign 或配置未开启, 返回原始链接
+func ensureOpenlistSignedLink(originLink string, header http.Header) string {
+	u, err := url.Parse(originLink)
+	if err != nil {
+		return originLink
+	}
+	q := u.Query()
+	if q.Has("sign") {
+		return originLink
+	}
+	if config.C.Openlist == nil || config.C.Openlist.RequestWithSign == nil || !*config.C.Openlist.RequestWithSign {
+		return originLink
+	}
+	if !strings.HasPrefix(u.Path, "/d/") {
+		return originLink
+	}
+
+	raw := strings.TrimPrefix(u.Path, "/d/")
+	segs := strings.Split(raw, "/")
+	parts := make([]string, 0, len(segs))
+	for _, seg := range segs {
+		if seg == "" {
+			continue
+		}
+		name, e := url.PathUnescape(seg)
+		if e != nil {
+			name = seg
+		}
+		parts = append(parts, name)
+	}
+	openlistPath := "/" + strings.Join(parts, "/")
+	res := openlist.FetchFsGet(openlistPath, header)
+	if res.Code != http.StatusOK || res.Data.Sign == "" {
+		return originLink
+	}
+
+	q.Set("sign", res.Data.Sign)
+	u.RawQuery = q.Encode()
+	return u.String()
 }

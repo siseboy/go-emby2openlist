@@ -47,6 +47,8 @@ emby:
 openlist:
   host: http://192.168.0.109:5244            # openlist 访问地址
   token: openlist-xxxxx                      # openlist api key 可以在 openlist 管理后台查看
+  # openlist 如果开启了签名, 此处需设置为 true
+  request-with-sign: true
   # 将 openlist 目录树映射生成到磁盘, 并对特殊容器进行特定的转换
   # 具体使用方式可参考仓库 Readme 文档
   local-tree-gen:
@@ -57,12 +59,6 @@ openlist:
     # 生成的 strm 内容路径前缀, 为空则默认使用 `${openlist.host}/d`
     # 示例: 将默认的 `http://172.17.0.1/d/` 替换为相对路径 `/mnt/openlist/`
     strm-content-base: /mnt/openlist
-    # 是否对路径分段进行 URL 编码, 默认: true
-    # 设置为 false 后, 生成的 strm 内容将保留原始字符 (不编码)
-    strm-content-escape: false
-    # 是否在 strm 内容中附加签名参数, 默认: true
-    # 设置为 false 后, 生成的 strm 内容不包含 `?sign=` 片段
-    strm-content-with-sign: false
     # 程序自动删除文件的最大数量
     #
     # 当检测到 openlist 目录树与本地比较缺失文件数量大于这个值时

@@ -10,6 +10,9 @@ type Openlist struct {
 	Token string `yaml:"token"`
 	// Host openlist 访问地址（如果 openlist 使用本地代理模式, 则这个地址必须配置公网可访问地址）
 	Host string `yaml:"host"`
+	// RequestWithSign 请求 openlist 资源时是否自动附加签名参数
+	// 默认值: true
+	RequestWithSign *bool `yaml:"request-with-sign"`
 
 	// LocalTreeGen 本地目录树生成相关
 	LocalTreeGen *LocalTreeGen `yaml:"local-tree-gen"`
@@ -21,6 +24,12 @@ func (a *Openlist) Init() error {
 	}
 	if err := a.LocalTreeGen.Init(); err != nil {
 		return fmt.Errorf("openlist.local-tree-gen 配置错误: %w", err)
+	}
+
+	// 处理请求是否附加签名的默认值
+	if a.RequestWithSign == nil {
+		v := true
+		a.RequestWithSign = &v
 	}
 
 	return nil
@@ -55,14 +64,6 @@ type LocalTreeGen struct {
 	// StrmContentBase 生成的 strm 内容路径前缀, 可为空
 	// 为空时默认使用 `${openlist.host}/d`
 	StrmContentBase string `yaml:"strm-content-base"`
-
-	// StrmContentEscape 是否对路径分段进行 URL 编码
-	// 默认值: true; 若用户未配置, 在初始化时置为 true
-	StrmContentEscape *bool `yaml:"strm-content-escape"`
-
-	// StrmContentWithSign 是否在 strm 内容中附加签名参数
-	// 默认值: true; 设置为 false 时不生成 `?sign=` 片段
-	StrmContentWithSign *bool `yaml:"strm-content-with-sign"`
 
 	// Threads 同步线程数
 	Threads int `yaml:"threads"`
@@ -145,18 +146,6 @@ func (ltg *LocalTreeGen) Init() error {
 			continue
 		}
 		ltg.keepSuffixes[s] = struct{}{}
-	}
-
-	// 处理 strm 内容编码开关默认值
-	if ltg.StrmContentEscape == nil {
-		v := true
-		ltg.StrmContentEscape = &v
-	}
-
-	// 处理 strm 内容是否附加签名的默认值
-	if ltg.StrmContentWithSign == nil {
-		v := true
-		ltg.StrmContentWithSign = &v
 	}
 
 	return nil
