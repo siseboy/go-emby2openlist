@@ -87,7 +87,7 @@
 
 1. 准备配置
 
-> 示例配置为完整版配置，首次部署可以参照下方优先跑通程序，再按需补充其他配置，保存并命名为 `config.yml`
+> 示例配置为完整版配置，首次部署可以参照下方优先跑通程序，再按需补充其他配置，保存并命名为 `config.yaml`
 ```yaml
 emby:
   host: http://172.17.0.1:8096            # emby 访问地址
@@ -118,7 +118,7 @@ path:
 
 2. 创建 docker-compose 文件
 
-在配置相同目录下，创建 `docker-compose.yml` 粘贴以下代码：
+在配置相同目录下，创建 `docker-compose.yaml` 粘贴以下代码：
 
 ```yaml
 version: "3.1"
@@ -131,7 +131,7 @@ services:
     container_name: go-emby2openlist
     restart: always
     volumes:
-      - ./config.yml:/app/config.yml
+      - ./config.yaml:/app/config.yaml
       - ./localtree:/app/localtree
     ports:
       - 8090:8090 # navidrome
@@ -155,7 +155,7 @@ docker-compose up -d --build
 ### 使用步骤
 
 1. 修改配置，按照自己的需求配置好 `openlist.local-tree-gen` 属性
-2. 修改 `docker-compose.yml` 文件，将容器目录 `/app/localtree` 映射到宿主机中
+2. 修改 `docker-compose.yaml` 文件，将容器目录 `/app/localtree` 映射到宿主机中
 3. 运行程序 开始自动扫描生成目录树
 4. 将宿主机的目录树路径，映射到 Emby 容器中，即可扫描入库
 

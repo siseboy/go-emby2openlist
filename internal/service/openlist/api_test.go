@@ -10,7 +10,7 @@ import (
 )
 
 func TestFetch(t *testing.T) {
-	err := config.ReadFromFile("../../../config.yml")
+	err := config.ReadFromFile("../../../config.yaml")
 	if err != nil {
 		t.Error(err)
 		return

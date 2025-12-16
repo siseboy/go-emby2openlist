@@ -9,7 +9,7 @@ import (
 )
 
 func TestWalkFsList(t *testing.T) {
-	err := config.ReadFromFile("../../../config.yml")
+	err := config.ReadFromFile("../../../config.yaml")
 	if err != nil {
 		t.Fatal(err)
 		return

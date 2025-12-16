@@ -10,7 +10,7 @@ services:
     container_name: go-emby2openlist
     restart: always
     volumes:
-      - ./config.yml:/app/config.yml
+      - ./config.yaml:/app/config.yaml
       - ./openlist-local-tree:/app/openlist-local-tree
     ports:
       - 8095:8095 # http
