@@ -3,6 +3,7 @@ package urls
 import (
 	"log"
 	"net/url"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -89,4 +90,40 @@ func Unescape(rawUrl string) string {
 	}
 
 	return dc
+}
+
+func Segments(p string) []string {
+	p = strings.TrimPrefix(p, "/")
+	parts := strings.Split(p, "/")
+	segs := make([]string, 0, len(parts))
+	for _, s := range parts {
+		if s == "" {
+			continue
+		}
+		segs = append(segs, s)
+	}
+	return segs
+}
+
+func Build(base string, segs []string, q map[string]string) string {
+	if IsRemote(base) {
+		u, err := url.Parse(base)
+		if err != nil {
+			return base
+		}
+		escaped := make([]string, 0, len(segs))
+		for _, s := range segs {
+			escaped = append(escaped, url.PathEscape(s))
+		}
+		u.Path = path.Join(u.Path, strings.Join(escaped, "/"))
+		if len(q) > 0 {
+			qs := u.Query()
+			for k, v := range q {
+				qs.Set(k, v)
+			}
+			u.RawQuery = qs.Encode()
+		}
+		return u.String()
+	}
+	return path.Join(base, path.Join(segs...))
 }

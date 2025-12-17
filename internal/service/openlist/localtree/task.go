@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -84,65 +82,39 @@ func LoadTaskWriter(container string) TaskWriter {
 // StrmWriter 写文件对应的 openlist strm 文件
 type StrmWriter struct{}
 
-func pathSegments(p string) []string {
-	p = strings.TrimPrefix(p, "/")
-	parts := strings.Split(p, "/")
-	segs := make([]string, 0, len(parts))
-	for _, s := range parts {
-		if s == "" {
-			continue
-		}
-		segs = append(segs, s)
-	}
-	return segs
-}
-
 // OpenlistPath 生成媒体的 openlist http 访问地址
 func (sw *StrmWriter) OpenlistPath(task FileTask) string {
-	segs := pathSegments(task.Path)
-
+	segs := urls.Segments(task.Path)
 	cfg := config.C.Openlist
 	if cfg == nil {
 		return ""
 	}
-	hostURL, err := url.Parse(cfg.Host)
-	if err != nil || hostURL.Host == "" {
-		hostURL = &url.URL{Scheme: "https", Host: cfg.Host}
-	}
-	u := &url.URL{
-		Scheme: hostURL.Scheme,
-		Host:   hostURL.Host,
-		Path:   path.Join(hostURL.Path, "d", path.Join(segs...)),
-	}
+	base := strings.TrimRight(cfg.Host, "/") + "/d"
+	q := map[string]string{}
 	if cfg.RequestWithSign != nil && *cfg.RequestWithSign && task.Sign != "" {
-		q := u.Query()
-		q.Set("sign", task.Sign)
-		u.RawQuery = q.Encode()
+		q["sign"] = task.Sign
 	}
-	return u.String()
+	return urls.Build(base, segs, q)
 }
 
 // StrmContent 生成写入到 strm 文件内的内容
 // 支持自定义路径前缀
 func (sw *StrmWriter) StrmContent(task FileTask) string {
-	rawSegs := pathSegments(task.Path)
-	segs := make([]string, 0, len(rawSegs))
+	rawSegs := urls.Segments(task.Path)
+	cleanSegs := make([]string, 0, len(rawSegs))
 	for _, seg := range rawSegs {
 		if strings.Contains(seg, "\\'") {
 			seg = strings.ReplaceAll(seg, "\\'", "'")
 		}
-		segs = append(segs, url.PathEscape(seg))
+		cleanSegs = append(cleanSegs, seg)
 	}
 
-	// 处理前缀, 默认使用 `${openlist.host}/d`
 	base := strings.TrimSpace(config.C.Openlist.LocalTreeGen.StrmContentBase)
 	if base == "" {
 		base = fmt.Sprintf("%s/d", strings.TrimRight(config.C.Openlist.Host, "/"))
 	}
 	base = strings.TrimRight(base, "/")
-
-	pathPart := fmt.Sprintf("%s/%s", base, strings.Join(segs, "/"))
-	return pathPart
+	return urls.Build(base, cleanSegs, nil)
 }
 
 // Path 将 openlist 文件路径中的文件名
