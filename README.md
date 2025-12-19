@@ -98,7 +98,6 @@ navidrome:
   # Navidrome服务访问地址
   host: http://172.17.0.1:4533
 
-# 该配置仅针对通过磁盘挂载方式接入的网盘, 如果你使用的是 strm, 可忽略该配置
 openlist:
   host: http://172.17.0.1:5244            # openlist 访问地址
   token: openlist-xxxxx                         # openlist api key 可以在 openlist 管理后台查看

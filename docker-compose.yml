@@ -11,6 +11,6 @@ services:
     restart: always
     volumes:
       - ./config.yaml:/app/config.yaml
-      - ./openlist-local-tree:/app/openlist-local-tree
+      - ./localtree:/app/localtree
     ports:
       - 8095:8095 # http

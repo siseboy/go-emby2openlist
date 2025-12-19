@@ -111,11 +111,7 @@ func Build(base string, segs []string, q map[string]string) string {
 		if err != nil {
 			return base
 		}
-		escaped := make([]string, 0, len(segs))
-		for _, s := range segs {
-			escaped = append(escaped, url.PathEscape(s))
-		}
-		u.Path = path.Join(u.Path, strings.Join(escaped, "/"))
+		u.Path = path.Join(u.Path, strings.Join(segs, "/"))
 		if len(q) > 0 {
 			qs := u.Query()
 			for k, v := range q {
